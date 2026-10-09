@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AI 英语分级学习与打卡系统</title>
+    <!-- iOS PWA 适配 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="英语45分">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg: #F3F4F6;
+            --card: #FFFFFF;
+            --text: #1F2937;
+            --subtext: #6B7280;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 24px 20px 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: -10px auto 20px;
+            padding: 0 16px;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 15px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        .btn:active {
+            background: var(--primary-hover);
+        }
+        .btn-outline {
+            background: transparent;
+            color: var(--primary);
+            border: 1.5px solid var(--primary);
+        }
+        .tag {
+            display: inline-block;
+            background: #EEF2FF;
+            color: var(--primary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .sentence {
+            font-size: 17px;
+            line-height: 1.6;
+            background: #F9FAFB;
+            padding: 14px;
+            border-left: 4px solid var(--primary);
+            border-radius: 0 8px 8px 0;
+            margin: 12px 0;
+            white-space: pre-wrap;
+        }
+        .quiz-opt {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            padding: 14px;
+            margin: 10px 0;
+            border-radius: 10px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .quiz-opt:active {
+            background: #EEF2FF;
+            border-color: var(--primary);
+        }
+        .hidden { display: none; }
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .api-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2 style="margin:0;">AI 英语分级学习与打卡系统</h2>
+        <p style="margin:6px 0 0; opacity: 0.9; font-size:14px;">每天 45 分钟 · 智能等级适配 · 自由交流梦</p>
+    </div>
+
+    <div class="container">
+        
+        <!-- 用户状态与连续打卡卡片 -->
+        <div class="card">
+            <div class="flex-between">
+                <div>
+                    <span class="tag" id="user-level-tag">当前等级：未测评</span>
+                    <h3 style="margin: 8px 0 0;" id="streak-text">连续打卡：0 天</h3>
+                </div>
+                <button class="btn btn-outline" style="width:auto; padding:6px 12px; font-size:12px;" onclick="startAssessment()">重新测评</button>
+            </div>
+            
+            <!-- API Key 设置区（可选） -->
+            <details style="margin-top: 12px; font-size: 12px; color: var(--subtext);">
+                <summary style="cursor:pointer;">⚙️ 高级配置 (可选接入 DeepSeek / OpenAI API)</summary>
+                <input type="password" id="api-key-input" class="api-input" placeholder="输入 sk-xxxx 密钥，留空则使用内置精选库" onchange="saveApiKey()">
+            </details>
+        </div>
+
+        <!-- 测评模块 -->
+        <div id="assessment-card" class="card">
+            <h3>🎯 5分钟 AI 英语水平快速测评</h3>
+            <p style="color: var(--subtext); font-size:14px;">请回答以下题目，系统将自动评估你的 CEFR 英语等级，并为你定制后续的学习资源：</p>
+            <div id="quiz-box">
+                <p id="quiz-q" style="font-weight:600; font-size:16px;"></p>
+                <div id="quiz-options"></div>
+            </div>
+        </div>
+
+        <!-- 每日 45 分钟学习主卡片 -->
+        <div id="learning-card" class="card hidden">
+            <div class="flex-between">
+                <h3 style="margin:0;">📅 今日 45 分钟学习内容</h3>
+                <button class="btn" style="width:auto; padding:6px 12px; font-size:12px;" onclick="generateDailyContent()">🤖 生成新内容</button>
+            </div>
+            
+            <hr style="border:none; border-top:1px solid #E5E7EB; margin: 16px 0;">
+
+            <!-- 15分钟：听力训练 -->
+            <div style="margin-bottom: 24px;">
+                <span class="tag">01 听力精听 (15 Min)</span>
+                <p id="listening-text" class="sentence">正在载入听力文本...</p>
+                <button class="btn btn-outline" onclick="speakText('listening-text')">🔊 播放原生标准朗读 (TTS)</button>
+            </div>
+
+            <!-- 15分钟：分级阅读 -->
+            <div style="margin-bottom: 24px;">
+                <span class="tag">02 分级阅读 (15 Min)</span>
+                <p id="reading-text" class="sentence">正在载入阅读文章...</p>
+                <button class="btn btn-outline" onclick="speakText('reading-text')">🔊 朗读阅读文章</button>
+            </div>
+
+            <!-- 10分钟：影子跟读 -->
+            <div style="margin-bottom: 24px;">
+                <span class="tag">03 口语跟读 (10 Min)</span>
+                <p id="shadowing-text" class="sentence">正在载入跟读金句...</p>
+                <button class="btn btn-outline" onclick="speakText('shadowing-text')">🎙️ 朗读跟读示范</button>
+            </div>
+
+            <!-- 5分钟：打卡复盘 -->
+            <div>
+                <span class="tag">04 习惯打卡 (5 Min)</span>
+                <button class="btn" style="margin-top:12px; font-size:16px;" onclick="doCheckIn()">✅ 完成今日 45 分钟学习打卡</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 全局状态管理（借助 localStorage 实现本地数据持久化）
+        let userLevel = localStorage.getItem('user_level') || null;
+        let streak = parseInt(localStorage.getItem('streak') || '0');
+        let apiKey = localStorage.getItem('api_key') || '';
+        let currentQuestion = 0;
+        let score = 0;
+
+        // 评测题目
+        const questions = [
+            {
+                q: "1. Select the correct word: 'She _____ to work by subway every day.'",
+                opts: ["A. go", "B. goes", "C. going", "D. gone"],
+                ans: 1
+            },
+            {
+                q: "2. What is the closest meaning to 'Crucial'?",
+                opts: ["A. Minor", "B. Extremely Important", "C. Easy", "D. Slow"],
+                ans: 1
+            },
+            {
+                q: "3. Complete the sentence: 'If I had known about the traffic, I _____ earlier.'",
+                opts: ["A. will leave", "B. would have left", "C. left", "D. leave"],
+                ans: 1
+            }
+        ];
+
+        // 本地内置备份内容（无 API 时自动调用）
+        const contentDB = {
+            "L1": {
+                listening: "Hello! My name is Amy. I live in a quiet city. Every morning, I like to drink green tea and read short stories.",
+                reading: "Tom has a friendly dog named Max. Max loves running in the park and playing fetch with a small ball.",
+                shadowing: "Consistency is the key to acquiring any new skills."
+            },
+            "L2": {
+                listening: "Effective communication is not just about using complex vocabulary, but also about active listening and clear expression.",
+                reading: "Forming a daily study habit takes dedication. Spending 45 minutes every day reading and listening helps train your mind in English.",
+                shadowing: "Small daily improvements over time lead to stunning long-term results."
+            },
+            "L3": {
+                listening: "Technological advancements have radically transformed how modern learners access educational materials globally.",
+                reading: "Language acquisition thrives on comprehensive input. Engaging with content slightly above your current proficiency accelerates intuitive understanding.",
+                shadowing: "Mastering a second language unveils a completely original perspective on the world."
+            }
+        };
+
+        function initApp() {
+            document.getElementById('streak-text').innerText = `连续打卡：${streak} 天`;
+            if (apiKey) document.getElementById('api-key-input').value = apiKey;
+
+            if (userLevel) {
+                document.getElementById('user-level-tag').innerText = `当前等级：${userLevel}`;
+                document.getElementById('assessment-card').classList.add('hidden');
+                document.getElementById('learning-card').classList.remove('hidden');
+                generateDailyContent();
+            } else {
+                startAssessment();
+            }
+        }
+
+        function saveApiKey() {
+            apiKey = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('api_key', apiKey);
+            alert('API 密钥配置已保存！');
+        }
+
+        function startAssessment() {
+            currentQuestion = 0;
+            score = 0;
+            document.getElementById('assessment-card').classList.remove('hidden');
+            document.getElementById('learning-card').classList.add('hidden');
+            showQuestion();
+        }
+
+        function showQuestion() {
+            if (currentQuestion >= questions.length) {
+                finishAssessment();
+                return;
+            }
+            let qData = questions[currentQuestion];
+            document.getElementById('quiz-q').innerText = qData.q;
+            let html = '';
+            qData.opts.forEach((opt, idx) => {
+                html += `<button class="quiz-opt" onclick="answerQuiz(${idx})">${opt}</button>`;
+            });
+            document.getElementById('quiz-options').innerHTML = html;
+        }
+
+        function answerQuiz(idx) {
+            if (idx === questions[currentQuestion].ans) score++;
+            currentQuestion++;
+            showQuestion();
+        }
+
+        function finishAssessment() {
+            if (score <= 1) userLevel = 'L1 (入门级)';
+            else if (score === 2) userLevel = 'L2 (基础级)';
+            else userLevel = 'L3 (进阶级)';
+
+            localStorage.setItem('user_level', userLevel);
+            document.getElementById('user-level-tag').innerText = `当前等级：${userLevel}`;
+            alert(`🎉 测评完成！评估结果为：${userLevel}。系统已为您配置适配的推送内容！`);
+            
+            document.getElementById('assessment-card').classList.add('hidden');
+            document.getElementById('learning-card').classList.remove('hidden');
+            generateDailyContent();
+        }
+
+        async function generateDailyContent() {
+            let lvlKey = userLevel.startsWith('L1') ? 'L1' : (userLevel.startsWith('L2') ? 'L2' : 'L3');
+
+            // 如果配置了 API Key 则调用在线大模型 API
+            if (apiKey) {
+                document.getElementById('listening-text').innerText = "🤖 AI 正在生成专属听力文本...";
+                document.getElementById('reading-text').innerText = "🤖 AI 正在生成专属阅读文章...";
+                document.getElementById('shadowing-text').innerText = "🤖 AI 正在生成专属跟读句子...";
+                try {
+                    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            messages: [{
+                                role: "user",
+                                content: `请为英语 ${userLevel} 等级初学者生成 1 组每日学习卡片，包含：listening (80词听力短文), reading (120词分级阅读), shadowing (1句跟读金句)。请用纯 JSON 格式返回，格式如下: {"listening":"...","reading":"...","shadowing":"..."}`
+                            }]
+                        })
+                    });
+                    const resData = await response.json();
+                    const content = JSON.parse(resData.choices[0].message.content);
+                    document.getElementById('listening-text').innerText = content.listening;
+                    document.getElementById('reading-text').innerText = content.reading;
+                    document.getElementById('shadowing-text').innerText = content.shadowing;
+                    return;
+                } catch (e) {
+                    console.warn("API 调用失败或未响应，将自动使用本地精选库：", e);
+                }
+            }
+
+            // 未配置 API Key 或 API 异常时，使用本地默认数据库
+            let data = contentDB[lvlKey];
+            document.getElementById('listening-text').innerText = data.listening;
+            document.getElementById('reading-text').innerText = data.reading;
+            document.getElementById('shadowing-text').innerText = data.shadowing;
+        }
+
+        // Web Speech API 语音朗读控制
+        function speakText(elementId) {
+            let text = document.getElementById(elementId).innerText;
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // 停止当前所有朗读队列
+                let msg = new SpeechSynthesisUtterance(text);
+                msg.lang = 'en-US';
+                msg.rate = 0.9; // 调整为适合听力练习的 0.9x 语速
+                window.speechSynthesis.speak(msg);
+            } else {
+                alert('当前浏览器环境不支持原声发音，推荐在 iOS Safari 或 Chrome 中打开使用。');
+            }
+        }
+
+        // 完成打卡
+        function doCheckIn() {
+            streak++;
+            localStorage.setItem('streak', streak);
+            document.getElementById('streak-text').innerText = `连续打卡：${streak} 天`;
+            alert(`🎉 打卡成功！你已完成今日 45 分钟学习。连续打卡天数达：${streak} 天，继续坚持！`);
+        }
+
+        // 启动应用
+        initApp();
+    </script>
+</body>
+</html>
